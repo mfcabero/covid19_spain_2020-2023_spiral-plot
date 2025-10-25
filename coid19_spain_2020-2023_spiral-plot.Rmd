@@ -1,0 +1,113 @@
+---
+title: "Visualization of COVID-19 Cases in Spain (2020–2023) Using a Spiral Plot" 
+author: "Miguel Familiar Cabero"
+date: "October, 2025"
+output: html_document
+---
+
+# Spiral Visualization of Daily COVID-19 Cases in Spain (2020–2023)
+
+This visualization shows the evolution of **daily new COVID-19 cases in Spain**,
+represented through a **spiral plot**.  
+
+Each full turn of the spiral corresponds to a calendar year (2020–2023), 
+allowing the visualization of **seasonality, epidemic peaks, and overall**
+**trends** across time. A **color scheme** is used to distinguish between years.
+
+**Main interpretation:**
+- The highest peaks correspond to the successive epidemic waves that occurred 
+between 2020 and 2022.  
+- From 2023 onward, a notable decline in new daily cases is observed, consistent
+with the effects of vaccination and changes in public health policies.  
+
+**Source:** [Our World in Data](https://ourworldindata.org/coronavirus).  
+**Dataset:** [Our World in Data – COVID-19 Compact Data](https://catalog.ourworldindata.org/garden/covid/latest/compact/compact.csv).  
+**R code:** developed using the `spiralize` package (v1.1.0).
+
+---
+
+```{r fig.width=7, fig.height=7, echo=TRUE}
+# Libraries
+library(spiralize)
+library(grid)
+library(dplyr)
+library(zoo)
+
+# Data read
+data <- read.csv("https://catalog.ourworldindata.org/garden/covid/latest/compact/compact.csv")
+
+spain <- subset(data, country == "Spain")
+spain$date <- as.Date(spain$date)
+spain <- spain[!is.na(spain$new_cases), ]
+spain <- spain[order(spain$date), ]
+
+# 7-day moving average
+spain <- spain %>%
+  mutate(new_cases_smooth = rollmean(new_cases, 7, fill = NA, align = "right"),
+         year = format(date, "%Y"))
+
+# Color coding per Y
+years <- unique(spain$year)
+colors <- c("2020" = "#1f78b4",
+            "2021" = "#33a02c",
+            "2022" = "#e31a1c",
+            "2023" = "#ff7f00",
+            "2024" = "#6a3d9a")
+colors <- colors[names(colors) %in% years]
+
+# Spiral plot
+grid.newpage()
+
+# Centered spiral, scaled to avoid cutting edges
+spiral_initialize_by_time(
+  xlim = range(spain$date),
+  period = "year",
+  normalize_year = TRUE,
+  start = 0.15,   
+  end = 6         
+)
+
+# Common y-scale for all years
+max_y <- max(spain$new_cases_smooth, na.rm = TRUE) / 1000
+spiral_track(height = 0.8, ylim = c(0, max_y * 1.1))
+
+# Time axis
+axis_dates <- seq(min(spain$date), max(spain$date), by = "3 months")
+spiral_axis(at = axis_dates, labels = format(axis_dates, "%b %Y"))
+
+# Draw smoothed lines for each year
+for (yr in years) {
+  data_year <- subset(spain, year == yr)
+  spiral_lines(data_year$date, data_year$new_cases_smooth / 1000,
+               gp = gpar(col = colors[yr], lwd = 1.2))
+}
+
+# Title
+grid.text(
+  "New COVID-19 Cases in Spain (7-day average) during 2022-2023 period",
+  x = 0.5,            
+  y = 0.08,            
+  gp = gpar(cex = 0.8, col = "black", fontface = "bold")
+)
+
+# Legend
+legend_labels <- names(colors)
+legend_colors <- colors
+
+lg <- legendGrob(
+  labels = legend_labels,
+  gp = gpar(col = legend_colors, lwd = 3),
+  nrow = 1
+)
+
+pushViewport(viewport(x = 0.5, y = 0.08, just = c("center", "bottom")))
+grid.draw(lg)
+popViewport()
+
+# Credit
+grid.text(
+  "Credit: Our World in Data (https://ourworldindata.org/coronavirus)",
+  x = 0.5, y = 0.02,
+  gp = gpar(cex = 0.6, col = "grey30")
+)
+```
